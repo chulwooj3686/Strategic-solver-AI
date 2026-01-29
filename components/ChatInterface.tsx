@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Message, AppMode } from '../types';
-import { getAIResponse } from '../services/geminiService';
-import System2Loader from './System2Loader';
+import { Message, AppMode } from '../types.ts';
+import { getAIResponse } from '../services/geminiService.ts';
+import System2Loader from './System2Loader.tsx';
 
 interface ChatInterfaceProps {
   mode: AppMode;

@@ -1,7 +1,7 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import { SYSTEM_INSTRUCTION } from "../constants";
-import { Message, AppMode } from "../types";
+import { SYSTEM_INSTRUCTION } from "../constants.tsx";
+import { Message, AppMode } from "../types.ts";
 
 export const getAIResponse = async (
   mode: AppMode,
