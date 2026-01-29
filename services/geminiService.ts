@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { SYSTEM_INSTRUCTION } from "../constants.tsx";
 import { Message, AppMode } from "../types.ts";
 
@@ -8,36 +8,53 @@ export const getAIResponse = async (
   chatHistory: Message[],
   userInput: string
 ): Promise<string> => {
-  // 가이드라인에 따라 API Key를 직접 주입
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
+  // API 키 유무 확인 (Vercel 환경 변수 API_KEY가 필수입니다)
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    return "API 키가 설정되지 않았습니다. Vercel 환경 변수에 API_KEY를 추가해주세요.";
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
   const modeContext = `현재 모드: ${mode}\n`;
   
-  // Gemini API는 히스토리의 첫 번째 메시지가 'user'여야 하는 경우가 많으므로
-  // 처음에 자동 생성된 환영 메시지(assistant)는 제외하고 전달합니다.
-  const history = chatHistory
+  // 히스토리 변환: Gemini API 규격에 맞춰 'user'와 'model'로 매핑
+  // 첫 번째 assistant 메시지는 보통 welcome 메시지이므로 history에서 제외하여 user 메시지로 시작하게 함
+  const contents = chatHistory
     .filter((m, index) => !(index === 0 && m.role === 'assistant'))
     .map(m => ({
       role: m.role === 'user' ? 'user' : 'model',
       parts: [{ text: m.content }]
     }));
 
+  // 현재 사용자의 입력을 마지막에 추가
+  contents.push({
+    role: 'user',
+    parts: [{ text: userInput }]
+  });
+
   try {
-    const chat = ai.chats.create({
+    const result = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
+      contents: contents as any,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION + "\n" + modeContext,
         temperature: 0.7,
         topP: 0.95,
       },
-      history: history as any,
     });
 
-    const result = await chat.sendMessage({ message: userInput });
-    return result.text || "죄송합니다. 응답을 생성하는 중에 문제가 발생했습니다.";
-  } catch (error) {
-    console.error("Gemini API 상세 오류:", error);
-    // Vercel 환경에서 API KEY가 없을 경우 403/401 오류가 발생할 수 있습니다.
-    return "시스템 오류가 발생했습니다. Vercel 환경 변수에 API_KEY가 설정되어 있는지 확인해주세요.";
+    return result.text || "AI로부터 유효한 응답을 받지 못했습니다.";
+  } catch (error: any) {
+    console.error("Gemini API Error Detail:", error);
+    
+    // 더 구체적인 오류 피드백 제공
+    if (error.message?.includes('403') || error.message?.includes('401')) {
+      return "인증 오류: API 키가 유효하지 않거나 권한이 없습니다.";
+    }
+    if (error.message?.includes('429')) {
+      return "할당량 초과: 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.";
+    }
+    
+    return `시스템 오류: ${error.message || '알 수 없는 오류가 발생했습니다.'}`;
   }
 };
